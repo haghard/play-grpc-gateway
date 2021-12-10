@@ -22,8 +22,8 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
   val generateHttpService: (Logger, Service) => scala.collection.immutable.Seq[CodeGeneratorResponse.File] =
     (logger, service) => {
       var methodsWithParamTyped: Map[String, String] = Map.empty
-      val b = CodeGeneratorResponse.File.newBuilder()
-      val outputFileName = s"${service.name}Controller"
+      val b                                          = CodeGeneratorResponse.File.newBuilder()
+      val outputFileName                             = s"${service.name}Controller"
 
       logger.info(s"★ ★ ★ Found ${service.name} in ${service.packageName} ${service.descriptor} ★ ★ ★")
 
@@ -45,16 +45,16 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                       val (pathWithParam, params) =
                         path match {
                           case PathParamKVExp(segments, k, v) =>
-                            val paramName = k.trim
+                            val paramName   = k.trim
                             val pathSegment = v.trim.replace("/*", "")
-                            val getPath = s"$segments$pathSegment/:$paramName"
+                            val getPath     = s"$segments$pathSegment/:$paramName"
                             (getPath, Set(paramName))
                           case _ =>
                             if (PathWithNoQueryParams.findAllMatchIn(path).hasNext) {
                               (path, Set.empty[String])
                             } else {
                               val matcher = PathParamsExp.pattern.matcher(path)
-                              var params = Set.empty[String]
+                              var params  = Set.empty[String]
                               if (matcher.find()) {
                                 val param =
                                   path.substring(matcher.start(), matcher.end()).trim.replaceAll("[\\{\\}]", "")
@@ -98,7 +98,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                       val queryParameters = methodInputParamsWithTypes.keySet.diff(pathParametersWithTyped.keySet)
                       val queryParametersWithTypes = queryParameters.map(p => p -> methodInputParamsWithTypes(p)).toMap
 
-                      //turn it into a string.
+                      // turn it into a string.
                       val paramsStr = pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ") + ", " +
                         queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
 
@@ -143,7 +143,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
         logger.info(s"rpc ${method.grpcName}(${method.inputType.getName}) returns (${method.outputType.getName})")
       }
 
-      routesBuffer.append(PlayRoutesScaffolding.routesFooter("controllers")) //service.packageName
+      routesBuffer.append(PlayRoutesScaffolding.routesFooter("controllers")) // service.packageName
       println(ANSI_RED_BACKGROUND + routesBuffer.toString() + ANSI_RESET)
 
       val routesFile = new File(s"./conf/routes_${service.name}")
@@ -160,9 +160,9 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
 }
 
 object PlayScalaHttpServiceCodeGenerator extends PlayScalaHttpServiceCodeGenerator {
-  val Postfix = "Controller"
+  val Postfix             = "Controller"
   val ANSI_RED_BACKGROUND = "\u001B[41m"
-  val ANSI_RESET = "\u001B[0m"
+  val ANSI_RESET          = "\u001B[0m"
 
   val HttpOptionExp = """(\d*):(.*)""".r
 
@@ -176,7 +176,7 @@ object PlayScalaHttpServiceCodeGenerator extends PlayScalaHttpServiceCodeGenerat
   val PathParamKVExp = """(.+)\{(.+)=(.+)\}""".r
 
   /** (e.g. /v1/messages/{name}, /v1/messages/{name}/age/{age}
-   */
+    */
   val PathParamsExp = """\{(.*?)}""".r
 
   // validate a URL path with no query params (e.g. /helloworld, /hello/world )

@@ -15,12 +15,12 @@ import @{service.packageName}._
 
 @defining(service.name) { serviceName =>
 
-class @{serviceName}Controller @@Inject()(config: Config, service: example.messaging.MessagingCnt)(implicit ec: ExecutionContext) extends InjectedController {
+class @{serviceName}Controller @@Inject()(config: Config)(implicit ec: ExecutionContext) extends InjectedController {
 
   @for((method, inputParams) <- methodsWithParamTyped) {
     def @{method} (@{inputParams}) = Action.async { implicit req =>
-      //
-      service.@{method}(@{inputParams})
+      //service.@{method}(@{inputParams})
+      ???
     }
   }
 }
