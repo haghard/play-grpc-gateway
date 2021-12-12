@@ -21,7 +21,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
 
   val generateHttpService: (Logger, Service) => scala.collection.immutable.Seq[CodeGeneratorResponse.File] =
     (logger, service) => {
-      val playControllersDir                          = new File(s"./app/$CntrPkgName")
+      new File(s"./app/$CntrPkgName").mkdir()
       var methodsWithMetaInfo: Vector[GrpcMethodInfo] = Vector.empty
 
       val b                        = CodeGeneratorResponse.File.newBuilder()
@@ -108,8 +108,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                             queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
                         else if (pathParametersWithTyped.nonEmpty)
                           pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ")
-                        else
-                          queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
+                        else queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
                       }
 
                       routesBuffer.append(
@@ -127,19 +126,73 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                         method.outputType.getFullName
                       )
 
-                    case GoogleHttpRule.PUT_FIELD_NUMBER =>
-                      ???
                     case GoogleHttpRule.POST_FIELD_NUMBER =>
+                      // For HTTP methods that allow a request body, the `body` field
+                      // specifies the mapping. Consider a REST update method on the
+                      // message resource collection:
+                      //
+                      //     service Messaging {
+                      //       rpc UpdateMessage(UpdateMessageRequest) returns (Message) {
+                      //         option (google.api.http) = {
+                      //           patch: "/v1/messages/{message_id}"
+                      //           body: "message"
+                      //         };
+                      //       }
+                      //     }
+                      //     message UpdateMessageRequest {
+                      //       string message_id = 1; // mapped to the URL
+                      //       Message message = 2;   // mapped to the body
+                      //     }
+                      //
+                      // The following HTTP JSON to RPC mapping is enabled, where the
+                      // representation of the JSON in the request body is determined by
+                      // protos JSON encoding:
+                      //
+                      // HTTP | gRPC
+                      // -----|-----
+                      // `PATCH /v1/messages/123456 { "text": "Hi!" }` | `UpdateMessage(message_id: "123456" message { text: "Hi!" })`
+
+                      // The special name `*` can be used in the body mapping to define that
+                      // every field not bound by the path template should be mapped to the
+                      // request body.  This enables the following alternative definition of
+                      // the update method:
+                      //
+                      //     service Messaging {
+                      //       rpc UpdateMessage(Message) returns (Message) {
+                      //         option (google.api.http) = {
+                      //           patch: "/v1/messages/{message_id}"
+                      //           body: "*"
+                      //         };
+                      //       }
+                      //     }
+                      //     message Message {
+                      //       string message_id = 1;
+                      //       string text = 2;
+                      //     }
+                      //
+                      //
+                      // The following HTTP JSON to RPC mapping is enabled:
+                      //
+                      // HTTP | gRPC
+                      // -----|-----
+                      // `PATCH /v1/messages/123456 { "text": "Hi!" }` | `UpdateMessage(message_id: "123456" text: "Hi!")`
+                      val cleanPath = path.trim
+                      println(s"*** POST $cleanPath")
+                      ???
+                    case GoogleHttpRule.PATCH_FIELD_NUMBER =>
+                      throw new Exception(s"Not supported ${GoogleHttpRule.PATCH_FIELD_NUMBER}")
+
+                    case GoogleHttpRule.PUT_FIELD_NUMBER =>
                       ???
                     case GoogleHttpRule.SELECTOR_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.SELECTOR_FIELD_NUMBER}")
                     case GoogleHttpRule.DELETE_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.DELETE_FIELD_NUMBER}")
-                    case GoogleHttpRule.PATCH_FIELD_NUMBER =>
-                      throw new Exception(s"Not supported ${GoogleHttpRule.PATCH_FIELD_NUMBER}")
                     case GoogleHttpRule.CUSTOM_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.CUSTOM_FIELD_NUMBER}")
                     case GoogleHttpRule.BODY_FIELD_NUMBER =>
+                      "*"
+                      ???
                     // throw new Exception(s"Not supported ${GoogleHttpRule.BODY_FIELD_NUMBER}")
                     case GoogleHttpRule.RESPONSE_BODY_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.RESPONSE_BODY_FIELD_NUMBER}")
@@ -165,17 +218,14 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
         _.write(routesBuffer.toString().getBytes(StandardCharsets.UTF_8))
       )
 
-      val implFileName = s"${service.name}ControllerImpl"
-      println(playControllersDir.exists())
-      if (!playControllersDir.exists()) {
-        playControllersDir.mkdirs()
-        val controllerFile = new File(s"./app/$CntrPkgName/$implFileName.scala")
+      val implFileName   = s"${service.name}ControllerImpl"
+      val controllerFile = new File(s"./app/$CntrPkgName/$implFileName.scala")
+      if (!controllerFile.exists())
         Using.resource(new FileOutputStream(controllerFile))(
           _.write(
             ControllerImpl(service.name, CntrPkgName, methodsWithMetaInfo).body.getBytes(StandardCharsets.UTF_8)
           )
         )
-      }
 
       b.setContent(Grpc2HttpController(service, methodsWithMetaInfo, CntrPkgName + "." + implFileName).body)
       b.setName(s"${service.packageDir}/$controllerOutputFileName.scala")
