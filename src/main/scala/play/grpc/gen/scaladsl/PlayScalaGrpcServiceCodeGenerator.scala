@@ -4,7 +4,7 @@ import scala.collection.immutable
 import akka.grpc.gen.Logger
 import akka.grpc.gen.scaladsl.{ScalaCodeGenerator, Service}
 import com.google.protobuf.compiler.PluginProtos.CodeGeneratorResponse
-import templates.PlayScala.txt.PlayGrpc2HttpService
+import templates.PlayScala.txt.{ControllerImpl, Grpc2HttpController}
 
 import java.io.{File, FileOutputStream}
 import java.nio.charset.StandardCharsets
@@ -21,9 +21,11 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
 
   val generateHttpService: (Logger, Service) => scala.collection.immutable.Seq[CodeGeneratorResponse.File] =
     (logger, service) => {
+      val playControllersDir                         = new File(s"./app/$CntrPkgName")
       var methodsWithParamTyped: Map[String, String] = Map.empty
-      val b                                          = CodeGeneratorResponse.File.newBuilder()
-      val outputFileName                             = s"${service.name}Controller"
+
+      val b                        = CodeGeneratorResponse.File.newBuilder()
+      val controllerOutputFileName = s"${service.name}Controller"
 
       logger.info(s"★ ★ ★ Found ${service.name} in ${service.packageName} ${service.descriptor} ★ ★ ★")
 
@@ -36,23 +38,25 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
           httpRuleStrBlock(i).trim match {
             case HttpOptionExp(ind, value) =>
               val path = value.replaceAll("\"", "").trim
-              // TODO: handle toInt convertion errors
               GoogleHttpRule.fromIndex(ind.trim.toInt) match {
                 case Some(validHttpRule) =>
                   validHttpRule match {
                     case GoogleHttpRule.GET_FIELD_NUMBER =>
-                      println(s"Found GET $path")
+                      logger.info(s"Found GET $path")
                       val (pathWithParam, params) =
                         path match {
+                          // GET wi /v1/{name=messages/*}
                           case PathParamKVExp(segments, k, v) =>
                             val paramName   = k.trim
                             val pathSegment = v.trim.replace("/*", "")
                             val getPath     = s"$segments$pathSegment/:$paramName"
                             (getPath, Set(paramName))
                           case _ =>
+                            // GET without path params (e.g. /helloworld, /hello/world)
                             if (PathWithNoQueryParams.findAllMatchIn(path).hasNext) {
                               (path, Set.empty[String])
                             } else {
+                              // GET with path params (e.g. /v1/messages/{name}, /v1/messages/{name}/age/{age}
                               val matcher = PathParamsExp.pattern.matcher(path)
                               var params  = Set.empty[String]
                               if (matcher.find()) {
@@ -69,7 +73,6 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                                 (b, params)
                               } else throw new Exception(s"Smth's wrong with url $path !")
                             }
-                          case _ => throw new Exception(s"Boom !!!")
                         }
 
                       val methodInputParamsWithTypes =
@@ -99,8 +102,15 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                       val queryParametersWithTypes = queryParameters.map(p => p -> methodInputParamsWithTypes(p)).toMap
 
                       // turn it into a string.
-                      val paramsStr = pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ") + ", " +
-                        queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
+                      val paramsStr = {
+                        if (pathParametersWithTyped.nonEmpty && queryParametersWithTypes.nonEmpty)
+                          pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ") + ", " +
+                            queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
+                        else if (pathParametersWithTyped.nonEmpty)
+                          pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ")
+                        else
+                          queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
+                      }
 
                       routesBuffer.append(
                         PlayRoutesScaffolding.routesGetRoute(
@@ -126,7 +136,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                     case GoogleHttpRule.CUSTOM_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.CUSTOM_FIELD_NUMBER}")
                     case GoogleHttpRule.BODY_FIELD_NUMBER =>
-                      throw new Exception(s"Not supported ${GoogleHttpRule.BODY_FIELD_NUMBER}")
+                    // throw new Exception(s"Not supported ${GoogleHttpRule.BODY_FIELD_NUMBER}")
                     case GoogleHttpRule.RESPONSE_BODY_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.RESPONSE_BODY_FIELD_NUMBER}")
                     case GoogleHttpRule.ADDITIONAL_BINDINGS_FIELD_NUMBER =>
@@ -143,23 +153,37 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
         logger.info(s"rpc ${method.grpcName}(${method.inputType.getName}) returns (${method.outputType.getName})")
       }
 
-      routesBuffer.append(PlayRoutesScaffolding.routesFooter("controllers")) // service.packageName
+      routesBuffer.append(PlayRoutesScaffolding.routesFooter(CntrPkgName))
       println(ANSI_RED_BACKGROUND + routesBuffer.toString() + ANSI_RESET)
 
-      val routesFile = new File(s"./conf/routes_${service.name}")
+      val routesFile = new File(s"./conf/routes_${service.name}_gen")
       Using.resource(new FileOutputStream(routesFile))(
         _.write(routesBuffer.toString().getBytes(StandardCharsets.UTF_8))
       )
 
-      b.setContent(PlayGrpc2HttpService(service, methodsWithParamTyped).body)
-      b.setName(s"${service.packageDir}/$outputFileName.scala")
+      val implFileName = s"${service.name}ControllerImpl"
+      println(playControllersDir.exists())
+      if (!playControllersDir.exists()) {
+        playControllersDir.mkdirs()
+        val controllerFile = new File(s"./app/$CntrPkgName/$implFileName.scala")
+        Using.resource(new FileOutputStream(controllerFile))(
+          _.write(
+            ControllerImpl(service.name, CntrPkgName, methodsWithParamTyped).body.getBytes(StandardCharsets.UTF_8)
+          )
+        )
+      }
 
-      logger.info(s"★ ★ ★ Generating ${service.packageName}.$outputFileName  ★ ★ ★")
+      b.setContent(Grpc2HttpController(service, methodsWithParamTyped, CntrPkgName + "." + implFileName).body)
+      b.setName(s"${service.packageDir}/$controllerOutputFileName.scala")
+
+      logger.info(s"★ ★ ★ Generating ${service.packageName}.$controllerOutputFileName  ★ ★ ★")
       immutable.Seq(b.build)
     }
 }
 
 object PlayScalaHttpServiceCodeGenerator extends PlayScalaHttpServiceCodeGenerator {
+  val CntrPkgName = "controllers"
+
   val Postfix             = "Controller"
   val ANSI_RED_BACKGROUND = "\u001B[41m"
   val ANSI_RESET          = "\u001B[0m"
