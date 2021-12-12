@@ -21,8 +21,8 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
 
   val generateHttpService: (Logger, Service) => scala.collection.immutable.Seq[CodeGeneratorResponse.File] =
     (logger, service) => {
-      val playControllersDir                         = new File(s"./app/$CntrPkgName")
-      var methodsWithParamTyped: Map[String, String] = Map.empty
+      val playControllersDir                          = new File(s"./app/$CntrPkgName")
+      var methodsWithMetaInfo: Vector[GrpcMethodInfo] = Vector.empty
 
       val b                        = CodeGeneratorResponse.File.newBuilder()
       val controllerOutputFileName = s"${service.name}Controller"
@@ -102,7 +102,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                       val queryParametersWithTypes = queryParameters.map(p => p -> methodInputParamsWithTypes(p)).toMap
 
                       // turn it into a string.
-                      val paramsStr = {
+                      val inputParamsStr = {
                         if (pathParametersWithTyped.nonEmpty && queryParametersWithTypes.nonEmpty)
                           pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ") + ", " +
                             queryParametersWithTypes.map { case (p, t) => s"$p: $t" }.mkString(", ")
@@ -117,11 +117,15 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                           s"${service.grpcName}$Postfix",
                           pathWithParam,
                           method.grpcName,
-                          paramsStr
+                          inputParamsStr
                         )
                       )
 
-                      methodsWithParamTyped = methodsWithParamTyped + (method.grpcName -> paramsStr)
+                      methodsWithMetaInfo = methodsWithMetaInfo :+ GrpcMethodInfo(
+                        method.grpcName,
+                        inputParamsStr,
+                        method.outputType.getFullName
+                      )
 
                     case GoogleHttpRule.PUT_FIELD_NUMBER =>
                       ???
@@ -168,12 +172,12 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
         val controllerFile = new File(s"./app/$CntrPkgName/$implFileName.scala")
         Using.resource(new FileOutputStream(controllerFile))(
           _.write(
-            ControllerImpl(service.name, CntrPkgName, methodsWithParamTyped).body.getBytes(StandardCharsets.UTF_8)
+            ControllerImpl(service.name, CntrPkgName, methodsWithMetaInfo).body.getBytes(StandardCharsets.UTF_8)
           )
         )
       }
 
-      b.setContent(Grpc2HttpController(service, methodsWithParamTyped, CntrPkgName + "." + implFileName).body)
+      b.setContent(Grpc2HttpController(service, methodsWithMetaInfo, CntrPkgName + "." + implFileName).body)
       b.setName(s"${service.packageDir}/$controllerOutputFileName.scala")
 
       logger.info(s"★ ★ ★ Generating ${service.packageName}.$controllerOutputFileName  ★ ★ ★")
