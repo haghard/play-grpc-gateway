@@ -46,7 +46,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                   validHttpRule match {
                     case GoogleHttpRule.GET_FIELD_NUMBER =>
                       logger.info(s"Found GET $path")
-                      // For example /v1/messages/:name/age/:age - Pathparams: [name,age]
+                      // For example /v1/messages/:name/age/:age - PathParams: [name,age]
                       val (playRouteUrlPath, pathParams) =
                         path match {
                           // GET wi /v1/{name=messages/*}
@@ -55,8 +55,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                             val pathSegment = v.trim.replace("/*", "")
                             val getPath     = s"$segments$pathSegment/:$param"
                             (getPath, Set(param))
-                          case _ =>
-                            extractUrlPathParams(path)
+                          case _ => extractUrlPathParams(path)
                         }
 
                       val methodInputParamsWithTypes = extactInputParamsWithTypes(method)
@@ -79,9 +78,10 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                       }
 
                       routesBuffer.append(
-                        PlayRoutesScaffolding.routesGetRoute(
+                        PlayRoutesScaffolding.routes(
                           s"${service.grpcName}$Postfix",
                           playRouteUrlPath,
+                          HttpVerb.GET.name,
                           method.grpcName,
                           inputParamsStr
                         )
@@ -90,95 +90,41 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                       methodsWithMetaInfo = methodsWithMetaInfo :+ GrpcMethodInfo(
                         method.grpcName,
                         inputParamsStr,
-                        method.outputType.getFullName
+                        method.inputType.getFullName,
+                        method.outputType.getFullName,
+                        HttpVerb.GET
                       )
 
-                    case GoogleHttpRule.POST_FIELD_NUMBER =>
-                      // For HTTP methods that allow a request body, the `body` field
-                      // specifies the mapping. Consider a REST update method on the
-                      // message resource collection:
-                      //
-                      //     service Messaging {
-                      //       rpc UpdateMessage(UpdateMessageRequest) returns (Message) {
-                      //         option (google.api.http) = {
-                      //           patch: "/v1/messages/{message_id}"
-                      //           body: "message"
-                      //         };
-                      //       }
-                      //     }
-                      //     message UpdateMessageRequest {
-                      //       string message_id = 1; // mapped to the URL
-                      //       Message message = 2;   // mapped to the body
-                      //     }
-                      //
-                      // The following HTTP JSON to RPC mapping is enabled, where the
-                      // representation of the JSON in the request body is determined by
-                      // protos JSON encoding:
-                      //
-                      // HTTP | gRPC
-                      // -----|-----
-                      // `PATCH /v1/messages/123456 { "text": "Hi!" }` | `UpdateMessage(message_id: "123456" message { text: "Hi!" })`
-
-                      // The special name `*` can be used in the body mapping to define that
-                      // every field not bound by the path template should be mapped to the
-                      // request body.  This enables the following alternative definition of
-                      // the update method:
-                      //
-                      //     service Messaging {
-                      //       rpc UpdateMessage(Message) returns (Message) {
-                      //         option (google.api.http) = {
-                      //           patch: "/v1/messages/{message_id}"
-                      //           body: "*"
-                      //         };
-                      //       }
-                      //     }
-                      //     message Message {
-                      //       string message_id = 1;
-                      //       string text = 2;
-                      //     }
-                      //
-                      //
-                      // The following HTTP JSON to RPC mapping is enabled:
-                      //
-                      // HTTP | gRPC
-                      // -----|-----
-                      // `PATCH /v1/messages/123456 { "text": "Hi!" }` | `UpdateMessage(message_id: "123456" text: "Hi!")`
-
-                      println(s"*** POST $path")
+                    // Turn POST, PATCH, PUT into POST ???
+                    case GoogleHttpRule.POST_FIELD_NUMBER | GoogleHttpRule.PATCH_FIELD_NUMBER |
+                        GoogleHttpRule.PUT_FIELD_NUMBER =>
                       val (playRouteUrlPath, pathParams) = extractUrlPathParams(path)
                       val methodInputParamsWithTypes     = extactInputParamsWithTypes(method)
                       val pathParametersWithTyped =
                         extractPathParametersWithTypes(pathParams, methodInputParamsWithTypes, method)
 
-                      println(s"*** POST $playRouteUrlPath - ${pathParametersWithTyped.mkString(",")} ")
+                      val inputParamsStr =
+                        if (pathParametersWithTyped.isEmpty) ""
+                        else pathParametersWithTyped.map { case (p, t) => s"$p: $t" }.mkString(", ")
 
                       routesBuffer.append(
-                        PlayRoutesScaffolding.routesPostRoute(
+                        PlayRoutesScaffolding.routes(
                           s"${service.grpcName}$Postfix",
                           playRouteUrlPath,
-                          method.grpcName
+                          HttpVerb.POST.name,
+                          method.grpcName,
+                          inputParamsStr
                         )
                       )
 
-                    case GoogleHttpRule.PATCH_FIELD_NUMBER =>
-                      println(s"*** PATCH $path")
-                      val (playRouteUrlPath, pathParams) = extractUrlPathParams(path)
-                      val methodInputParamsWithTypes     = extactInputParamsWithTypes(method)
-                      val pathParametersWithTyped =
-                        extractPathParametersWithTypes(pathParams, methodInputParamsWithTypes, method)
-
-                      println(s"*** PATHCH $playRouteUrlPath - ${pathParametersWithTyped.mkString(",")} ")
-
-                      routesBuffer.append(
-                        PlayRoutesScaffolding.routesPostRoute(
-                          s"${service.grpcName}$Postfix",
-                          playRouteUrlPath,
-                          method.grpcName
-                        )
+                      methodsWithMetaInfo = methodsWithMetaInfo :+ GrpcMethodInfo(
+                        method.grpcName,
+                        inputParamsStr,
+                        method.inputType.getFullName,
+                        method.outputType.getFullName,
+                        HttpVerb.POST
                       )
 
-                    case GoogleHttpRule.PUT_FIELD_NUMBER =>
-                      ???
                     case GoogleHttpRule.SELECTOR_FIELD_NUMBER =>
                       throw new Exception(s"Not supported ${GoogleHttpRule.SELECTOR_FIELD_NUMBER}")
                     case GoogleHttpRule.DELETE_FIELD_NUMBER =>
@@ -205,18 +151,18 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
       routesBuffer.append(PlayRoutesScaffolding.routesFooter(CntrPkgName))
       println(ANSI_RED_BACKGROUND + routesBuffer.toString() + ANSI_RESET)
 
-      // 1. routes file
+      // 1. Routes file
       Using.resource(new FileOutputStream(new File(s"./conf/routes_${service.name}_gen")))(
         _.write(routesBuffer.toString().getBytes(StandardCharsets.UTF_8))
       )
 
-      // 2. context file
+      // 2. Context file.
       if (!contextFile.exists())
         Using.resource(new FileOutputStream(contextFile))(
           _.write(Context(service.name, CntrPkgName, methodsWithMetaInfo).body.getBytes(StandardCharsets.UTF_8))
         )
 
-      // 3. controller file
+      // 3. Controller file.
       b.setContent(HttpController(service, methodsWithMetaInfo, CntrPkgName + "." + contextFileName).body)
       b.setName(s"${service.packageDir}/$controllerFileName.scala")
 

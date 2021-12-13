@@ -17,28 +17,19 @@ object PlayRoutesScaffolding {
        |
        |""".stripMargin
 
-  def routesPostRoute(
+  def routes(
     controllerName: String,
-    postPath: String,
-    method: String
-  ): String =
-    s"""
-       |POST  $postPath  $controllerName.$method()
-       |""".stripMargin
-
-  def routesGetRoute(
-    controllerName: String,
-    getPath: String,
+    path: String,
+    httpVerb: String,
     method: String,
     params: String
   ): String =
     if (params.isEmpty)
       s"""
-         |GET $getPath  $controllerName.$method()
-         |""".stripMargin
+       |$httpVerb $path  $controllerName.$method()
+       |""".stripMargin
     else
       s"""
-         |GET $getPath  $controllerName.$method($params)
-         |""".stripMargin
-
+       |$httpVerb $path  $controllerName.$method($params)
+       |""".stripMargin
 }
