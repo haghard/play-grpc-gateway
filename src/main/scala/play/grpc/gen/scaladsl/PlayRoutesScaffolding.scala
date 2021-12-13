@@ -17,10 +17,13 @@ object PlayRoutesScaffolding {
        |
        |""".stripMargin
 
-  def routesPostRoute(cntPkgName: String, controllerName: String, path: String, method: String): String =
+  def routesPostRoute(
+    controllerName: String,
+    postPath: String,
+    method: String
+  ): String =
     s"""
-       |POST  $path  $cntPkgName.$controllerName.$method()
-       |
+       |POST  $postPath  $controllerName.$method()
        |""".stripMargin
 
   def routesGetRoute(
