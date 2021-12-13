@@ -9,14 +9,6 @@ object PlayRoutesScaffolding {
        |
        |""".stripMargin
 
-  def routesFooter(cntPkgName: String): String =
-    s"""
-       |
-       |# Map static resources from the /public folder to the /assets URL path
-       |GET     /assets/*file   $cntPkgName.Assets.versioned(path="/public", file: Asset)
-       |
-       |""".stripMargin
-
   def routes(
     controllerName: String,
     path: String,

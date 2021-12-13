@@ -30,7 +30,7 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
       val contextFileName = s"${service.name}Context"
       val contextFile     = new File(s"./app/$CntrPkgName/$contextFileName.scala")
 
-      logger.info(s"★ ★ ★ Found ${service.name} in ${service.packageName} ★ ★ ★")
+      logger.info(s"★ ★ ★ Play gRPC Gateway. Found ${service.name} in ${service.packageName} ★ ★ ★")
 
       val routesBuffer = new StringBuilder()
       routesBuffer.append(PlayRoutesScaffolding.routesHeader())
@@ -45,7 +45,6 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
                 case Some(validHttpRule) =>
                   validHttpRule match {
                     case GoogleHttpRule.GET_FIELD_NUMBER =>
-                      logger.info(s"Found GET $path")
                       // For example /v1/messages/:name/age/:age - PathParams: [name,age]
                       val (playRouteUrlPath, pathParams) =
                         path match {
@@ -148,15 +147,16 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
         logger.info(s"rpc ${method.grpcName}(${method.inputType.getName}) returns (${method.outputType.getName})")
       }
 
-      routesBuffer.append(PlayRoutesScaffolding.routesFooter(CntrPkgName))
+      println(ANSI_RED_BACKGROUND + "Generated Play routes: " + ANSI_RESET)
       println(ANSI_RED_BACKGROUND + routesBuffer.toString() + ANSI_RESET)
+      println(ANSI_RED_BACKGROUND + "Cut and paste them into your routes file. " + ANSI_RESET)
 
       // 1. Routes file
       Using.resource(new FileOutputStream(new File(s"./conf/routes_${service.name}_gen")))(
         _.write(routesBuffer.toString().getBytes(StandardCharsets.UTF_8))
       )
 
-      // 2. Context file.
+      // 2. Controller context file.
       if (!contextFile.exists())
         Using.resource(new FileOutputStream(contextFile))(
           _.write(Context(service.name, CntrPkgName, methodsWithMetaInfo).body.getBytes(StandardCharsets.UTF_8))

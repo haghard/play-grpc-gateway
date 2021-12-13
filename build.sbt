@@ -1,7 +1,9 @@
 import sbt._
 
-organization := "com.demo"
+organization := "com.ncl"
+
 name := "play-grpc-gateway"
+
 version := "0.0.1"
 
 scalaVersion := "2.12.15"
