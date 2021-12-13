@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class @{serviceName}ControllerImpl @@Inject()()(implicit ec: ExecutionContext) {
+class @{serviceName}Context @@Inject()()(implicit ec: ExecutionContext) {
 @for(e <- methods) {
   def @{e.name} (@{e.inputType}): Future[Result] = Future  {
     val r: @{e.outputType} = ???

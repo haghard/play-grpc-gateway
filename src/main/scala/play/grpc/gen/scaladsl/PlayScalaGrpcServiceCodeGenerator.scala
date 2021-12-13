@@ -1,13 +1,13 @@
 package play.grpc.gen.scaladsl
 
-import scala.collection.immutable
 import akka.grpc.gen.Logger
 import akka.grpc.gen.scaladsl.{ScalaCodeGenerator, Service}
 import com.google.protobuf.compiler.PluginProtos.CodeGeneratorResponse
-import templates.PlayScala.txt.{ControllerImpl, Grpc2HttpController}
+import templates.PlayScala.txt.{Context, HttpController}
 
 import java.io.{File, FileOutputStream}
 import java.nio.charset.StandardCharsets
+import scala.collection.immutable
 import scala.jdk.CollectionConverters.asScalaBufferConverter
 import scala.util.Using
 
@@ -26,6 +26,9 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
 
       val b                        = CodeGeneratorResponse.File.newBuilder()
       val controllerOutputFileName = s"${service.name}Controller"
+
+      val implFileName   = s"${service.name}Context"
+      val controllerFile = new File(s"./app/$CntrPkgName/$implFileName.scala")
 
       logger.info(s"★ ★ ★ Found ${service.name} in ${service.packageName} ${service.descriptor} ★ ★ ★")
 
@@ -213,21 +216,17 @@ class PlayScalaHttpServiceCodeGenerator extends ScalaCodeGenerator {
       routesBuffer.append(PlayRoutesScaffolding.routesFooter(CntrPkgName))
       println(ANSI_RED_BACKGROUND + routesBuffer.toString() + ANSI_RESET)
 
-      val routesFile = new File(s"./conf/routes_${service.name}_gen")
-      Using.resource(new FileOutputStream(routesFile))(
+      //
+      Using.resource(new FileOutputStream(new File(s"./conf/routes_${service.name}_gen")))(
         _.write(routesBuffer.toString().getBytes(StandardCharsets.UTF_8))
       )
 
-      val implFileName   = s"${service.name}ControllerImpl"
-      val controllerFile = new File(s"./app/$CntrPkgName/$implFileName.scala")
       if (!controllerFile.exists())
         Using.resource(new FileOutputStream(controllerFile))(
-          _.write(
-            ControllerImpl(service.name, CntrPkgName, methodsWithMetaInfo).body.getBytes(StandardCharsets.UTF_8)
-          )
+          _.write(Context(service.name, CntrPkgName, methodsWithMetaInfo).body.getBytes(StandardCharsets.UTF_8))
         )
 
-      b.setContent(Grpc2HttpController(service, methodsWithMetaInfo, CntrPkgName + "." + implFileName).body)
+      b.setContent(HttpController(service, methodsWithMetaInfo, CntrPkgName + "." + implFileName).body)
       b.setName(s"${service.packageDir}/$controllerOutputFileName.scala")
 
       logger.info(s"★ ★ ★ Generating ${service.packageName}.$controllerOutputFileName  ★ ★ ★")

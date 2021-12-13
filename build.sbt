@@ -4,9 +4,7 @@ organization := "com.demo"
 name := "play-grpc-gateway"
 version := "0.0.1"
 
-scalaVersion := "2.12.14"//15
-
-//scalaVersion := "2.13.7"
+scalaVersion := "2.12.15"
 
 scalacOptions ++= List("-encoding", "utf8", "-deprecation", "-feature", "-unchecked")
 
