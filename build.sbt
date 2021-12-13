@@ -14,7 +14,7 @@ scalafmtOnCompile := true
 
 libraryDependencies ++= {
   Seq(
-    //patched dependency with 
+    //patched dependency with method options
     "com.lightbend.akka.grpc" %% "akka-grpc-codegen" % "2.1.2"
       from """file:///Users/haghard/.ivy2/local/com.lightbend.akka.grpc/akka-grpc-codegen_2.12/2.1.2/jars/akka-grpc-codegen_2.12.jar""",
   )
